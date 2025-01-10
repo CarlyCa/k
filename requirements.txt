@@ -156,7 +156,6 @@ multiprocess==0.70.16
 multitasking==0.0.11
 murmurhash==1.0.9
 mypy-extensions==1.0.0
-mysql-client==0.0.1
 mysql-connector-python==9.1.0
 nba_api==1.4.1
 nbclassic==0.5.2
