@@ -43,7 +43,22 @@
                 <div class="card h-100">
                     <div class="card-body">
                         <h5 class="card-title">{{ item.name }}</h5>
-                        <p class="card-text">Rating: {{ "%.1f"|format(item.rating) }}/5</p>
+                        <p class="card-text">
+                            Current Rating: {{ "%.1f"|format(item.rating) }}/5
+                            <br>
+                            <small class="text-muted">Added on: {{ item.created_at.strftime('%Y-%m-%d') }}</small>
+                        </p>
+                        {% if item.revisions|length > 1 %}
+                            <div class="small text-muted mb-2">
+                                Previous ratings:
+                                {% for revision in item.revisions[1:] %}
+                                    <div>
+                                        {{ "%.1f"|format(revision.rating) }}/5 
+                                        ({{ revision.created_at.strftime('%Y-%m-%d') }})
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
                         <p class="card-text"><small class="text-muted">Notes: {{ item.notes or "No notes yet." }}</small></p>
                         
                         <button class="btn btn-sm btn-primary mb-2" type="button" data-bs-toggle="collapse" 

@@ -25,11 +25,18 @@
 
     <div class="container mt-4">
         <div class="row mb-4">
-            <div class="col-md-6">
-                <h1>My Restaurants</h1>
+            <div class="col-md-4">
+                <h1>Restaurants</h1>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
+                <div class="btn-group w-100" role="group">
+                    <a href="/?view=my" class="btn btn-{{ 'primary' if request.args.get('view') != 'shared' else 'outline-primary' }}">My Restaurants</a>
+                    <a href="/?view=shared" class="btn btn-{{ 'primary' if request.args.get('view') == 'shared' else 'outline-primary' }}">Shared With Me</a>
+                </div>
+            </div>
+            <div class="col-md-4">
                 <form class="d-flex" method="GET">
+                    <input type="hidden" name="view" value="{{ request.args.get('view', 'my') }}">
                     <input class="form-control me-2" type="search" name="search" placeholder="Search restaurants..." value="{{ request.args.get('search', '') }}">
                     <button class="btn btn-outline-primary" type="submit">Search</button>
                 </form>
@@ -50,23 +57,53 @@
                 <div class="card h-100">
                     <div class="card-body">
                         <h5 class="card-title">{{ restaurant.name }}</h5>
-                        <p class="card-text">Rating: {{ "%.1f"|format(restaurant.rating) }}/5</p>
-                        <a href="{{ url_for('view_menu_items', restaurant_id=restaurant.id) }}" class="btn btn-primary">View Menu Items</a>
+                        <p class="card-text">Average Rating: {{ "%.1f"|format(restaurant.rating) }}/5</p>
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('view_menu_items', restaurant_id=restaurant.id) }}" class="btn btn-primary">View Menu Items</a>
+                            {% if restaurant.user_id == current_user.id %}
+                            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#shareModal{{ restaurant.id }}">
+                                Share
+                            </button>
+                            {% else %}
+                            <small class="text-muted align-self-center">Shared by: {{ restaurant.user.username }}</small>
+                            {% endif %}
+                        </div>
+
+                        <!-- Share Modal -->
+                        {% if restaurant.user_id == current_user.id %}
+                        <div class="modal fade" id="shareModal{{ restaurant.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Share "{{ restaurant.name }}"</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <form action="{{ url_for('share_restaurant', restaurant_id=restaurant.id) }}" method="POST">
+                                            <div class="mb-3">
+                                                <label for="username" class="form-label">Username to share with:</label>
+                                                <input type="text" class="form-control" id="username" name="username" required>
+                                            </div>
+                                            <button type="submit" class="btn btn-primary">Share</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
 
+        {% if request.args.get('view') != 'shared' %}
         <div class="card mb-4">
             <div class="card-body">
                 <h5 class="card-title">Add a New Restaurant</h5>
                 <form action="{{ url_for('add_restaurant') }}" method="POST" class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-10">
                         <input type="text" class="form-control" name="name" placeholder="Restaurant Name" required>
-                    </div>
-                    <div class="col-md-4">
-                        <input type="number" class="form-control" name="rating" min="1" max="5" step="0.1" placeholder="Rating (1-5)" required>
                     </div>
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-success w-100">Add</button>
@@ -74,6 +111,7 @@
                 </form>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

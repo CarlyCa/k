@@ -28,25 +28,56 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(150), nullable=False)
 
 # Restaurant model
+# Association table for shared restaurants
+restaurant_shares = db.Table('restaurant_shares',
+    db.Column('restaurant_id', db.Integer, db.ForeignKey('restaurant.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True)
+)
+
 class Restaurant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    rating = db.Column(db.Float, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
     user = db.relationship('User', backref=db.backref('restaurants', lazy=True))
+    shared_with = db.relationship('User', secondary=restaurant_shares, 
+                                backref=db.backref('shared_restaurants', lazy=True))
+
+    @property
+    def rating(self):
+        menu_items = MenuItem.query.filter_by(restaurant_id=self.id).all()
+        if not menu_items:
+            return 0.0
+        return sum(item.rating for item in menu_items) / len(menu_items)
 
 # MenuItem model
+class MenuItemRevision(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    menu_item_id = db.Column(db.Integer, db.ForeignKey('menu_item.id'))
+    rating = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    notes = db.Column(db.Text, nullable=True)
+
 class MenuItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)  # Menu item name
-    rating = db.Column(db.Float, nullable=False)  # Menu item rating
-    notes = db.Column(db.Text, nullable=True)  # Optional notes for the menu item
-    restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'))  # Link to the restaurant
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))  # Link to the user who rated it
+    name = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+    restaurant_id = db.Column(db.Integer, db.ForeignKey('restaurant.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
 
     restaurant = db.relationship('Restaurant', backref=db.backref('menu_items', lazy=True))
     user = db.relationship('User', backref=db.backref('menu_items', lazy=True))
+    revisions = db.relationship('MenuItemRevision', backref='menu_item', order_by='MenuItemRevision.created_at.desc()')
+
+    @property
+    def rating(self):
+        latest_revision = MenuItemRevision.query.filter_by(menu_item_id=self.id).order_by(MenuItemRevision.created_at.desc()).first()
+        return latest_revision.rating if latest_revision else 0.0
+
+    @property
+    def notes(self):
+        latest_revision = MenuItemRevision.query.filter_by(menu_item_id=self.id).order_by(MenuItemRevision.created_at.desc()).first()
+        return latest_revision.notes if latest_revision else None
 
 
 @login_manager.user_loader
@@ -60,25 +91,56 @@ def setup_database():
             db.create_all()
             print("Database initialized successfully")
 
+@app.route('/share/<int:restaurant_id>', methods=['POST'])
+@login_required
+def share_restaurant(restaurant_id):
+    restaurant = Restaurant.query.get_or_404(restaurant_id)
+    if restaurant.user_id != current_user.id:
+        flash('You can only share restaurants you own.')
+        return redirect(url_for('index'))
+    
+    username = request.form['username']
+    user_to_share_with = User.query.filter_by(username=username).first()
+    
+    if not user_to_share_with:
+        flash('User not found.')
+        return redirect(url_for('index'))
+        
+    if user_to_share_with in restaurant.shared_with:
+        flash('Restaurant already shared with this user.')
+        return redirect(url_for('index'))
+        
+    restaurant.shared_with.append(user_to_share_with)
+    db.session.commit()
+    flash(f'Restaurant shared with {username}')
+    return redirect(url_for('index'))
+
 @app.route('/')
 @login_required
 def index():
     search_query = request.args.get('search', '')
-    if search_query:
-        restaurants = Restaurant.query.filter(
-            Restaurant.user_id == current_user.id,
-            Restaurant.name.ilike(f'%{search_query}%')
-        ).all()
+    view = request.args.get('view', 'my')  # 'my' or 'shared'
+    
+    if view == 'shared':
+        restaurants = current_user.shared_restaurants
+        if search_query:
+            restaurants = [r for r in restaurants if search_query.lower() in r.name.lower()]
     else:
-        restaurants = Restaurant.query.filter_by(user_id=current_user.id).all()
-    return render_template('index.html', restaurants=restaurants)
+        if search_query:
+            restaurants = Restaurant.query.filter(
+                Restaurant.user_id == current_user.id,
+                Restaurant.name.ilike(f'%{search_query}%')
+            ).all()
+        else:
+            restaurants = Restaurant.query.filter_by(user_id=current_user.id).all()
+    
+    return render_template('index.html', restaurants=restaurants, view=view)
 
 @app.route('/add', methods=['POST'])
 @login_required
 def add_restaurant():
     name = request.form['name']
-    rating = float(request.form['rating'])
-    new_restaurant = Restaurant(name=name, rating=rating, user_id=current_user.id)
+    new_restaurant = Restaurant(name=name, user_id=current_user.id)
     db.session.add(new_restaurant)
     db.session.commit()
     return redirect(url_for('index'))
@@ -95,10 +157,16 @@ def view_menu_items(restaurant_id):
 def add_menu_item(restaurant_id):
     name = request.form['name']
     rating = float(request.form['rating'])
-    notes = request.form.get('notes', '')  # Optional notes
-    new_menu_item = MenuItem(name=name, rating=rating, notes=notes, restaurant_id=restaurant_id, user_id=current_user.id)
+    notes = request.form.get('notes', '')
+    
+    new_menu_item = MenuItem(name=name, restaurant_id=restaurant_id, user_id=current_user.id)
     db.session.add(new_menu_item)
+    db.session.flush()  # This ensures new_menu_item gets its ID
+    
+    initial_revision = MenuItemRevision(menu_item_id=new_menu_item.id, rating=rating, notes=notes)
+    db.session.add(initial_revision)
     db.session.commit()
+    
     return redirect(url_for('view_menu_items', restaurant_id=restaurant_id))
 
 
@@ -107,14 +175,19 @@ def add_menu_item(restaurant_id):
 def rate_menu_item(menu_item_id):
     menu_item = MenuItem.query.get_or_404(menu_item_id)
 
-    # Ensure the current user is allowed to rate (optional check)
     if menu_item.user_id != current_user.id:
         flash("You can only rate your own menu items.")
         return redirect(url_for('view_menu_items', restaurant_id=menu_item.restaurant_id))
 
-    # Update the rating
     new_rating = float(request.form['rating'])
-    menu_item.rating = new_rating
+    notes = request.form.get('notes', '')
+    
+    new_revision = MenuItemRevision(
+        menu_item_id=menu_item.id,
+        rating=new_rating,
+        notes=notes
+    )
+    db.session.add(new_revision)
     db.session.commit()
 
     flash("Rating updated successfully!")
@@ -129,7 +202,16 @@ def update_notes(menu_item_id):
         return redirect(url_for('view_menu_items', restaurant_id=menu_item.restaurant_id))
 
     notes = request.form.get('notes', '')
-    menu_item.notes = notes
+    # Get the current rating from the latest revision
+    current_rating = menu_item.rating
+    
+    # Create a new revision with the updated notes but same rating
+    new_revision = MenuItemRevision(
+        menu_item_id=menu_item.id,
+        rating=current_rating,
+        notes=notes
+    )
+    db.session.add(new_revision)
     db.session.commit()
 
     flash("Notes updated successfully!")
