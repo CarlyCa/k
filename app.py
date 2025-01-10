@@ -132,13 +132,28 @@ def index():
     if view == 'shared':
         restaurants = current_user.shared_restaurants
         if search_query:
-            restaurants = [r for r in restaurants if search_query.lower() in r.name.lower()]
+            # Search in shared restaurants and their menu items
+            restaurants = [
+                r for r in restaurants 
+                if search_query.lower() in r.name.lower() or
+                any(search_query.lower() in item.name.lower() for item in r.menu_items)
+            ]
     else:
         if search_query:
-            restaurants = Restaurant.query.filter(
+            # Search in user's restaurants
+            restaurant_name_matches = Restaurant.query.filter(
                 Restaurant.user_id == current_user.id,
                 Restaurant.name.ilike(f'%{search_query}%')
-            ).all()
+            )
+            
+            # Search in menu items
+            menu_item_matches = Restaurant.query.join(MenuItem).filter(
+                Restaurant.user_id == current_user.id,
+                MenuItem.name.ilike(f'%{search_query}%')
+            )
+            
+            # Combine results
+            restaurants = list(set(restaurant_name_matches.all() + menu_item_matches.all()))
         else:
             restaurants = Restaurant.query.filter_by(user_id=current_user.id).all()
     

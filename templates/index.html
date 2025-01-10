@@ -58,6 +58,23 @@
                     <div class="card-body">
                         <h5 class="card-title">{{ restaurant.name }}</h5>
                         <p class="card-text">Average Rating: {{ "%.1f"|format(restaurant.rating) }}/5</p>
+                        {% if request.args.get('search') %}
+                            {% set search_query = request.args.get('search').lower() %}
+                            {% set matching_items = [] %}
+                            {% for item in restaurant.menu_items %}
+                                {% if search_query in item.name.lower() %}
+                                    {% set _ = matching_items.append(item) %}
+                                {% endif %}
+                            {% endfor %}
+                            {% if matching_items %}
+                                <div class="small text-muted mb-2">
+                                    Matching items:
+                                    {% for item in matching_items %}
+                                        <div>• {{ item.name }} ({{ "%.1f"|format(item.rating) }}/5)</div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        {% endif %}
                         <div class="d-flex gap-2">
                             <a href="{{ url_for('view_menu_items', restaurant_id=restaurant.id) }}" class="btn btn-primary">View Menu Items</a>
                             {% if restaurant.user_id == current_user.id %}
