@@ -9,10 +9,18 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
+
+# Database configuration
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://restaurant_6pmd_user:y93Jnqu7DdutMMvCD3ufENzJRWRBrQOU@dpg-cu0ms53tq21c73ctcekg-a.oregon-postgres.render.com/restaurant_6pmd')
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'fallback_key_for_dev')
-print("Current working directory:", os.getcwd())
+
+# Add the print statement here
+print(f"Connected to database: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
 # Initialize database
 db = SQLAlchemy(app)
@@ -87,9 +95,9 @@ def load_user(user_id):
 # Initialize the database
 def setup_database():
     with app.app_context():
-        if not os.path.exists('restaurants.db'):
-            db.create_all()
-            print("Database initialized successfully")
+        db.create_all()
+        print("Database initialized successfully")
+
 
 @app.route('/share/<int:restaurant_id>', methods=['POST'])
 @login_required
