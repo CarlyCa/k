@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu Items - {{ restaurant.name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Restaurant Rater</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Menu Items for {{ restaurant.name }}</h1>
+            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">Back to Restaurants</a>
+        </div>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-info">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row row-cols-1 row-cols-md-3 g-4 mb-4">
+            {% for item in menu_items %}
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ item.name }}</h5>
+                        <p class="card-text">Rating: {{ "%.1f"|format(item.rating) }}/5</p>
+                        <p class="card-text"><small class="text-muted">Notes: {{ item.notes or "No notes yet." }}</small></p>
+                        
+                        <button class="btn btn-sm btn-primary mb-2" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#updateItem{{ item.id }}">
+                            Update Item
+                        </button>
+                        
+                        <div class="collapse" id="updateItem{{ item.id }}">
+                            <div class="card card-body">
+                                <form action="{{ url_for('rate_menu_item', menu_item_id=item.id) }}" method="POST" class="mb-2">
+                                    <div class="input-group mb-2">
+                                        <input type="number" class="form-control" name="rating" min="1" max="5" step="0.1" 
+                                               placeholder="New Rating" required>
+                                        <button class="btn btn-outline-secondary" type="submit">Update Rating</button>
+                                    </div>
+                                </form>
+                                
+                                <form action="{{ url_for('update_notes', menu_item_id=item.id) }}" method="POST">
+                                    <div class="form-group">
+                                        <textarea class="form-control mb-2" name="notes" 
+                                                  placeholder="Update Notes">{{ item.notes }}</textarea>
+                                        <button type="submit" class="btn btn-outline-secondary">Update Notes</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Add a New Menu Item</h5>
+                <form action="{{ url_for('add_menu_item', restaurant_id=restaurant.id) }}" method="POST" class="row g-3">
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" name="name" placeholder="Menu Item Name" required>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control" name="rating" min="1" max="5" step="0.1" 
+                               placeholder="Rating (1-5)" required>
+                    </div>
+                    <div class="col-md-4">
+                        <textarea class="form-control" name="notes" placeholder="Add notes (optional)"></textarea>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-success w-100">Add Item</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
